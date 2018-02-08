@@ -34,7 +34,7 @@ forward void OnDownloadFailure(int iClient, char[] filename);
 /**
  * Do not edit below this line!
  */
-public Extension:__ext_latedl = 
+public Extension __ext_latedl = 
 {
 	name = "Late Downloads",
 	file = "latedl.ext",
