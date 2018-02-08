@@ -10,7 +10,7 @@ Just as any other [AMBuild](https://wiki.alliedmods.net/AMBuild) project:
 5. `ambuild`
 ## How to use this?
 Simply copy the extension binary to the `extensions` folder and the include file into the `scripting/include` folder.
-Now just create a new plugin and include `latedl.inc`.
+Now just create a new plugin and include [`latedl.inc`](include/latedl.inc).
 ## Sample script
 ```pawn
 ...
