@@ -52,10 +52,11 @@ int g_TransferID = 0;
 struct ActiveDownload {
 	const char * filename;
 	CUtlVector<int> clients;
-	float deadline;
+	float maximalDuration;
 };
 
 CUtlVector<ActiveDownload> g_ActiveDownloads;
+CUtlVector<float> g_BatchDeadlines;
 
 volatile const char * g_pFlaggedFile = NULL;
 
@@ -70,7 +71,8 @@ int g_OnQueryCvarValueFinishedHookId = 0;
 IForward *g_pOnDownloadSuccess = NULL;
 IForward *g_pOnDownloadFailure = NULL;
 
-ConVar g_MinimalBandwidth("latedl_minimalbandwidth", "64000", FCVAR_NONE, "Kick clients with lower bandwidth (bits per second). Zero to disable.");
+ConVar g_MinimalBandwidth("latedl_minimalbandwidth", "64", FCVAR_NONE, "Kick clients with lower bandwidth (in kbps). Zero to disable.");
+ConVar g_MaximalDelay("latedl_maximaldelay", "500", FCVAR_NONE, "Acceptable additional delay (in ms) when sending files.");
 ConVar g_RequireUpload("latedl_requireupload", "1", FCVAR_NONE, "Kick clients with \"sv_allowupload\" = 0. Zero to disable.");
 
 bool CExtension::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late) {
@@ -181,9 +183,9 @@ void CExtension::OnGameFrame(bool simulating) {
 			}
 			if (g_pFlaggedFile != NULL) {
 				g_pFlaggedFile = NULL;
-				if (activeDownload.deadline <= 0 || Plat_FloatTime() <= activeDownload.deadline)
+				if (activeDownload.maximalDuration <= 0 || Plat_FloatTime() <= g_BatchDeadlines[iClient])
 					continue; //still queued, all ok!
-				smutils->LogError(myself, "Client %d ('%s', %s) had insufficient bandwidth (<%d), failed to receive '%s' in time! Kicking!", iClient, chan->GetName(), chan->GetAddress(), g_MinimalBandwidth.GetInt(), activeDownload.filename);
+				smutils->LogError(myself, "Client %d ('%s', %s) had insufficient bandwidth (<%d kbps), failed to receive '%s' in time! Kicking!", iClient, chan->GetName(), chan->GetAddress(), g_MinimalBandwidth.GetInt(), activeDownload.filename);
 				OnDownloadFailure(iClient, activeDownload.filename);
 				playerhelpers->GetGamePlayer(gamehelpers->EdictOfIndex(iClient))->Kick("You have insufficient bandwidth!");
 				goto deactivate;
@@ -245,6 +247,8 @@ bool ReloadDownloadTable() {
 void CExtension::OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientMax) {
 	if (!ReloadDownloadTable())
 		smutils->LogError(myself, "Couldn't load download table!");
+	g_ActiveDownloads.RemoveAll();
+	g_BatchDeadlines.SetCount(clientMax + 1);
 }
 
 int AddStaticDownloads(CUtlVector<const char*> const & filenames, CUtlVector<const char *> & addedFiles) {
@@ -274,6 +278,8 @@ int AddStaticDownloads(CUtlVector<const char*> const & filenames, CUtlVector<con
 
 int SendFiles(CUtlVector<const char*> const & filenames) {
 	int minimalBandwidth = g_MinimalBandwidth.GetInt();
+	int maximalDelay = g_MaximalDelay.GetInt();
+	float now = Plat_FloatTime();
 
 	int sent = 0;
 	FOR_EACH_VEC(filenames, fit) {
@@ -281,10 +287,10 @@ int SendFiles(CUtlVector<const char*> const & filenames) {
 		bool failed = false;
 		ActiveDownload& activeDownload = g_ActiveDownloads[g_ActiveDownloads.AddToTail()];
 		activeDownload.filename = filename;
-		activeDownload.deadline = 0;
+		activeDownload.maximalDuration = 0;
 		if (minimalBandwidth > 0) {
 			int numBytes = g_pBaseFileSystem->Size(filename);
-			activeDownload.deadline = Plat_FloatTime() + (numBytes * 8) / (float)minimalBandwidth;
+			activeDownload.maximalDuration = 0.001f * maximalDelay + (numBytes * 8) / (minimalBandwidth * 1000.f);
 		}
 		for (int iClient = 1; iClient <= playerhelpers->GetMaxClients(); iClient++)
 		{
@@ -294,6 +300,9 @@ int SendFiles(CUtlVector<const char*> const & filenames) {
 			if (chan->SendFile(filename, g_TransferID, false)) {
 				g_TransferID++;
 				activeDownload.clients.AddToTail(iClient);
+				if (g_BatchDeadlines[iClient] < now)
+					g_BatchDeadlines[iClient] = now;
+				g_BatchDeadlines[iClient] += activeDownload.maximalDuration;
 			}
 			else {
 				failed = true;
