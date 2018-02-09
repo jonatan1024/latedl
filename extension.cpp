@@ -167,6 +167,7 @@ void CExtension::OnGameFrame(bool simulating) {
 		FOR_EACH_VEC(activeDownload.clients, cit) {
 			int iClient = activeDownload.clients[cit];
 			INetChannel * chan = (INetChannel*)engine->GetPlayerNetInfo(iClient);
+			bool resendSuccess;
 			if (!chan) {
 				smutils->LogError(myself, "Lost client %d when sending file '%s'!", iClient, activeDownload.filename);
 				OnDownloadFailure(iClient, activeDownload.filename);
@@ -175,7 +176,7 @@ void CExtension::OnGameFrame(bool simulating) {
 			
 			//Iä! Iä! Cthulhu fhtagn!
 			g_pFlaggedFile = activeDownload.filename;
-			bool resendSuccess = chan->SendFile(activeDownload.filename, g_TransferID++, false);
+			resendSuccess = chan->SendFile(activeDownload.filename, g_TransferID++, false);
 			if (!resendSuccess) {
 				smutils->LogError(myself, "Failed to track progress of sending file '%s' to client %d ('%s', %s)!", activeDownload.filename, iClient, chan->GetName(), chan->GetAddress());
 				OnDownloadFailure(iClient, activeDownload.filename);
