@@ -69,3 +69,4 @@ The last cvar kicks any player that rejects incoming files.
 ## Additional information
 * This was tested only in CS:GO, but any modern Source game (OrangeBox+) should be ok.
 * This extension used to be a part of the [Gorme](https://github.com/jonatan1024/gorme) project.
+* 8. 2. 2018 Valve torpedoed this extension by [defaulting sv_allowupload to zero](http://blog.counter-strike.net/index.php/2018/02/20051/).
