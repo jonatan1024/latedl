@@ -39,6 +39,9 @@
 
 #include "smsdk_ext.h"
 
+#if SOURCE_ENGINE == SE_LEFT4DEAD || SOURCE_ENGINE >= SE_LEFT4DEAD2
+#define DEMO_AWARE
+#endif
 
 /**
  * @brief Sample implementation of the SDK Extension.

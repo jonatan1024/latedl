@@ -175,7 +175,11 @@ void CExtension::OnGameFrame(bool simulating) {
 			
 			//Iä! Iä! Cthulhu fhtagn!
 			g_pFlaggedFile = activeDownload.filename;
+#ifdef DEMO_AWARE
 			bool resendSuccess = chan->SendFile(activeDownload.filename, g_TransferID++, false);
+#else
+			bool resendSuccess = chan->SendFile(activeDownload.filename, g_TransferID++);
+#endif
 			if (!resendSuccess) {
 				smutils->LogError(myself, "Failed to track progress of sending file '%s' to client %d ('%s', %s)!", activeDownload.filename, iClient, chan->GetName(), chan->GetAddress());
 				OnDownloadFailure(iClient, activeDownload.filename);
@@ -298,7 +302,11 @@ int SendFiles(CUtlVector<const char*> const & filenames) {
 			INetChannel * chan = (INetChannel*)engine->GetPlayerNetInfo(iClient);
 			if (!chan)
 				continue;
+#ifdef DEMO_AWARE
 			if (chan->SendFile(filename, g_TransferID, false)) {
+#else
+			if (chan->SendFile(filename, g_TransferID)) {
+#endif
 				g_TransferID++;
 				activeDownload.clients.AddToTail(iClient);
 				if (g_BatchDeadlines[iClient] < now)
@@ -331,7 +339,7 @@ int SendFiles(CUtlVector<const char*> const & filenames) {
 			else {
 				smutils->LogError(myself, "Failed to send file %d '%s'!", g_TransferID, filename);
 				OnDownloadFailure(0, filename);
-				g_ActiveDownloads.RemoveMultipleFromTail(1);
+				g_ActiveDownloads.FastRemove(g_ActiveDownloads.Count() - 1);
 			}
 		}
 		else{
