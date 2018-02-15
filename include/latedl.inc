@@ -3,17 +3,19 @@
  *
  * @param filenames		Array of file names.
  * @param numFiles		Number of files in array.
+ * @param addAsStatic	When true, files are also added into downloads table as static downloads. On the next call the files are checked against this table to avoid repeated downloads of the same files. 
  * @return				Number of successfully added files.
  */
-native int AddLateDownloads(char[][] filenames, int numFiles);
+native int AddLateDownloads(char[][] filenames, int numFiles, bool addAsStatic = true);
 
 /**
  * Enqueues single file to be sent to all connected clients.
  *
- * @param filename		Array of file names.
+ * @param filename		Name of the file.
+ * @param addAsStatic	See AddLateDownloads' description.
  * @return				Whether the file was successfully added.
  */
-native bool AddLateDownload(char[] filename);
+native bool AddLateDownload(char[] filename, bool addAsStatic = true);
 
 /**
  * Called when client successfully downloaded a file. This forward might be called before AddLateDownload(s) returns!

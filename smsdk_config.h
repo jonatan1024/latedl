@@ -40,7 +40,7 @@
 /* Basic information exposed publicly */
 #define SMEXT_CONF_NAME			"Late Downloads"
 #define SMEXT_CONF_DESCRIPTION	"Transfer files to clients late in game."
-#define SMEXT_CONF_VERSION		"1.0.0.0"
+#define SMEXT_CONF_VERSION		"1.0.1.0"
 #define SMEXT_CONF_AUTHOR		"jonatan1024"
 #define SMEXT_CONF_URL			"https://github.com/jonatan1024/latedl"
 #define SMEXT_CONF_LOGTAG		"LATEDL"

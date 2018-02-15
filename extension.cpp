@@ -257,7 +257,7 @@ void CExtension::OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientM
 	g_BatchDeadlines.FillWithValue(0);
 }
 
-int AddStaticDownloads(CUtlVector<const char*> const & filenames, CUtlVector<const char *> & addedFiles) {
+int AddStaticDownloads(CUtlVector<const char*> const & filenames, CUtlVector<const char *> * addedFiles) {
 	bool lock = engine->LockNetworkStringTables(true);
 
 	int added = 0;
@@ -273,7 +273,8 @@ int AddStaticDownloads(CUtlVector<const char*> const & filenames, CUtlVector<con
 			OnDownloadFailure(0, filename);
 			continue;
 		}
-		addedFiles.AddToTail(filename);
+		if(addedFiles)
+			addedFiles->AddToTail(filename);
 		added++;
 	}
 
@@ -362,7 +363,7 @@ int SendFiles(CUtlVector<const char*> const & filenames) {
 
 cell_t AddLateDownloads(IPluginContext *pContext, const cell_t *params) {
 	int argc = params[0];
-	if (argc != 2)
+	if (argc != 3)
 		return 0;
 	cell_t * fileArray = NULL;
 	pContext->LocalToPhysAddr(params[1], &fileArray);
@@ -379,31 +380,40 @@ cell_t AddLateDownloads(IPluginContext *pContext, const cell_t *params) {
 		filenames.AddToTail(str);
 	}
 
-	CUtlVector<const char *> addedFiles(0, numFiles);
-	int added = AddStaticDownloads(filenames, addedFiles);
-	if (added == 0)
-		return 0;
+	bool addToDownloadsTable = !!params[3];
 
-	int sent = SendFiles(addedFiles);
+	CUtlVector<const char *> * addedFilesPtr = &filenames;
+	if (addToDownloadsTable) {
+		CUtlVector<const char *> addedFiles(0, numFiles);
+		addedFilesPtr = &addedFiles;
+		int added = AddStaticDownloads(filenames, addedFilesPtr);
+		if (added == 0)
+			return 0;
+	}
+
+	int sent = SendFiles(*addedFilesPtr);
 	return sent;
 }
 
 cell_t AddLateDownload(IPluginContext *pContext, const cell_t *params) {
 	int argc = params[0];
-	if (argc != 1)
+	if (argc != 2)
 		return 0;
 
 	char * str;
 	CUtlVector<const char *> filenames(0, 1);
-	CUtlVector<const char *> addedFiles(0, 1);
 
 	pContext->LocalToString(params[1], &str);
 	filenames.AddToTail(str);
 
-	int added = AddStaticDownloads(filenames, addedFiles);
-	if (added == 0)
-		return 0;
-	int sent = SendFiles(addedFiles);
+	bool addToDownloadsTable = !!params[2];
+	
+	if (addToDownloadsTable) {
+		int added = AddStaticDownloads(filenames, NULL);
+		if (added == 0)
+			return 0;
+	}
+	int sent = SendFiles(filenames);
 	return sent;
 }
 
