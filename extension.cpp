@@ -253,8 +253,8 @@ void CExtension::OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientM
 	if (!ReloadDownloadTable())
 		smutils->LogError(myself, "Couldn't load download table!");
 	g_ActiveDownloads.RemoveAll();
-	g_BatchDeadlines.SetCount(clientMax + 1);
-	g_BatchDeadlines.FillWithValue(0);
+	g_BatchDeadlines.RemoveAll();
+	g_BatchDeadlines.AddMultipleToTail(clientMax + 1, 0);
 }
 
 int AddStaticDownloads(CUtlVector<const char*> const & filenames, CUtlVector<const char *> * addedFiles) {
