@@ -383,10 +383,11 @@ cell_t AddLateDownloads(IPluginContext *pContext, const cell_t *params) {
 	}
 
 	bool addToDownloadsTable = !!params[3];
-
+	
+	CUtlVector<const char *> addedFiles(0, 0);
 	CUtlVector<const char *> * addedFilesPtr = &filenames;
 	if (addToDownloadsTable) {
-		CUtlVector<const char *> addedFiles(0, numFiles);
+		addedFiles.EnsureCapacity(numFiles);
 		addedFilesPtr = &addedFiles;
 		int added = AddStaticDownloads(filenames, addedFilesPtr);
 		if (added == 0)
