@@ -163,6 +163,18 @@ void OnDownloadFailure(int iClient, const char * filename) {
 }
 
 void CExtension::OnGameFrame(bool simulating) {
+	static float prevTime = Plat_FloatTime();
+	float time = Plat_FloatTime();
+	if (g_MinimalBandwidth.GetBool()) {
+		for (int iClient = 1; iClient <= playerhelpers->GetMaxClients(); iClient++) {
+			IGamePlayer * player = playerhelpers->GetGamePlayer(iClient);
+			if (player->IsConnected() && !player->IsInGame()) {
+				g_BatchDeadlines[iClient] += time - prevTime; //freeze time for connecting players
+			}
+		}
+	}
+	prevTime = time;
+
 	FOR_EACH_VEC(g_ActiveDownloads, dit) {
 		ActiveDownload& activeDownload = g_ActiveDownloads[dit];
 		const char * filename = activeDownload.filename;
@@ -190,7 +202,7 @@ void CExtension::OnGameFrame(bool simulating) {
 			}
 			if (g_pFlaggedFile != NULL) {
 				g_pFlaggedFile = NULL;
-				if (activeDownload.maximalDuration <= 0 || Plat_FloatTime() <= g_BatchDeadlines[iClient])
+				if (activeDownload.maximalDuration <= 0 || time <= g_BatchDeadlines[iClient])
 					continue; //still queued, all ok!
 				smutils->LogError(myself, "Client %d ('%s', %s) had insufficient bandwidth (<%d kbps), failed to receive '%s' in time! Kicking!", iClient, chan->GetName(), chan->GetAddress(), g_MinimalBandwidth.GetInt(), filename);
 				OnDownloadFailure(iClient, filename);
@@ -256,7 +268,8 @@ void CExtension::OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientM
 		smutils->LogError(myself, "Couldn't load download table!");
 	g_ActiveDownloads.RemoveAll();
 	g_BatchDeadlines.RemoveAll();
-	g_BatchDeadlines.AddMultipleToTail(clientMax + 1, 0);
+	float zero = 0;
+	g_BatchDeadlines.AddMultipleToTail(clientMax + 1, &zero);
 }
 
 int AddStaticDownloads(CUtlVector<const char*> const & filenames, CUtlVector<const char *> * addedFiles) {
@@ -285,10 +298,12 @@ int AddStaticDownloads(CUtlVector<const char*> const & filenames, CUtlVector<con
 	return added;
 }
 
-int SendFiles(CUtlVector<const char*> const & filenames) {
+int SendFiles(CUtlVector<const char*> const & filenames, int targetClient = 0) {
 	int minimalBandwidth = g_MinimalBandwidth.GetInt();
 	int maximalDelay = g_MaximalDelay.GetInt();
 	float now = Plat_FloatTime();
+	int firstClient = targetClient > 0 ? targetClient : 1;
+	int lastClient = targetClient > 0 ? targetClient : playerhelpers->GetMaxClients();
 
 	int sent = 0;
 	FOR_EACH_VEC(filenames, fit) {
@@ -301,11 +316,15 @@ int SendFiles(CUtlVector<const char*> const & filenames) {
 			int numBytes = g_pBaseFileSystem->Size(filename);
 			activeDownload.maximalDuration = 0.001f * maximalDelay + (numBytes * 8) / (minimalBandwidth * 1000.f);
 		}
-		for (int iClient = 1; iClient <= playerhelpers->GetMaxClients(); iClient++)
+		for (int iClient = firstClient; iClient <= lastClient; iClient++)
 		{
 			INetChannel * chan = (INetChannel*)engine->GetPlayerNetInfo(iClient);
-			if (!chan)
+			if (!chan) {
+				//if there was a target specified, consider this a failure
+				if (targetClient > 0)
+					failed = true;
 				continue;
+			}
 #ifdef DEMO_AWARE
 			if (chan->SendFile(filename, g_TransferID, false)) {
 #else
@@ -325,7 +344,7 @@ int SendFiles(CUtlVector<const char*> const & filenames) {
 			if (activeDownload.clients.Count() > 0) {
 				smutils->LogError(myself, "This shouldn't have happend! The file %d '%s' have been succesfully sent to some clients, but not to the others. Please inform the author of this extension that this happend!", g_TransferID, filename);
 				//provide some info for unfortunate future me
-				for (int iClient = 1; iClient <= playerhelpers->GetMaxClients(); iClient++) {
+				for (int iClient = firstClient; iClient <= lastClient; iClient++) {
 					INetChannel * chan = (INetChannel*)engine->GetPlayerNetInfo(iClient);
 					if (!chan)
 						continue;
@@ -342,7 +361,7 @@ int SendFiles(CUtlVector<const char*> const & filenames) {
 			}
 			else {
 				smutils->LogError(myself, "Failed to send file %d '%s'!", g_TransferID, filename);
-				OnDownloadFailure(0, filename);
+				OnDownloadFailure(targetClient, filename);
 				g_ActiveDownloads.FastRemove(g_ActiveDownloads.Count() - 1);
 			}
 		}
@@ -353,7 +372,7 @@ int SendFiles(CUtlVector<const char*> const & filenames) {
 
 	if (g_RequireUpload.GetBool()) {
 		//poll sv_allowupload value
-		for (int iClient = 1; iClient <= playerhelpers->GetMaxClients(); iClient++)
+		for (int iClient = firstClient; iClient <= lastClient; iClient++)
 		{
 			if(engine->GetPlayerNetInfo(iClient))
 				CExtension::CheckClientUpload(iClient);
@@ -365,7 +384,7 @@ int SendFiles(CUtlVector<const char*> const & filenames) {
 
 cell_t AddLateDownloads(IPluginContext *pContext, const cell_t *params) {
 	int argc = params[0];
-	if (argc != 3)
+	if (argc != 4)
 		return 0;
 	cell_t * fileArray = NULL;
 	pContext->LocalToPhysAddr(params[1], &fileArray);
@@ -383,6 +402,7 @@ cell_t AddLateDownloads(IPluginContext *pContext, const cell_t *params) {
 	}
 
 	bool addToDownloadsTable = !!params[3];
+	int iClient = params[4];
 	
 	CUtlVector<const char *> addedFiles(0, 0);
 	CUtlVector<const char *> * addedFilesPtr = &filenames;
@@ -394,13 +414,13 @@ cell_t AddLateDownloads(IPluginContext *pContext, const cell_t *params) {
 			return 0;
 	}
 
-	int sent = SendFiles(*addedFilesPtr);
+	int sent = SendFiles(*addedFilesPtr, iClient);
 	return sent;
 }
 
 cell_t AddLateDownload(IPluginContext *pContext, const cell_t *params) {
 	int argc = params[0];
-	if (argc != 2)
+	if (argc != 3)
 		return 0;
 
 	char * str;
@@ -410,13 +430,14 @@ cell_t AddLateDownload(IPluginContext *pContext, const cell_t *params) {
 	filenames.AddToTail(str);
 
 	bool addToDownloadsTable = !!params[2];
+	int iClient = params[3];
 	
 	if (addToDownloadsTable) {
 		int added = AddStaticDownloads(filenames, NULL);
 		if (added == 0)
 			return 0;
 	}
-	int sent = SendFiles(filenames);
+	int sent = SendFiles(filenames, iClient);
 	return sent;
 }
 
