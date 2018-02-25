@@ -165,39 +165,40 @@ void OnDownloadFailure(int iClient, const char * filename) {
 void CExtension::OnGameFrame(bool simulating) {
 	FOR_EACH_VEC(g_ActiveDownloads, dit) {
 		ActiveDownload& activeDownload = g_ActiveDownloads[dit];
+		const char * filename = activeDownload.filename;
 		FOR_EACH_VEC(activeDownload.clients, cit) {
 			int iClient = activeDownload.clients[cit];
 			INetChannel * chan = (INetChannel*)engine->GetPlayerNetInfo(iClient);
 			bool resendSuccess;
 			if (!chan) {
-				smutils->LogError(myself, "Lost client %d when sending file '%s'!", iClient, activeDownload.filename);
-				OnDownloadFailure(iClient, activeDownload.filename);
+				smutils->LogError(myself, "Lost client %d when sending file '%s'!", iClient, filename);
+				OnDownloadFailure(iClient, filename);
 				goto deactivate;
 			}
 			
 			//Iä! Iä! Cthulhu fhtagn!
-			g_pFlaggedFile = activeDownload.filename;
+			g_pFlaggedFile = filename;
 #ifdef DEMO_AWARE
-			resendSuccess = chan->SendFile(activeDownload.filename, g_TransferID++, false);
+			resendSuccess = chan->SendFile(filename, g_TransferID++, false);
 #else
-			resendSuccess = chan->SendFile(activeDownload.filename, g_TransferID++);
+			resendSuccess = chan->SendFile(filename, g_TransferID++);
 #endif
 			if (!resendSuccess) {
-				smutils->LogError(myself, "Failed to track progress of sending file '%s' to client %d ('%s', %s)!", activeDownload.filename, iClient, chan->GetName(), chan->GetAddress());
-				OnDownloadFailure(iClient, activeDownload.filename);
+				smutils->LogError(myself, "Failed to track progress of sending file '%s' to client %d ('%s', %s)!", filename, iClient, chan->GetName(), chan->GetAddress());
+				OnDownloadFailure(iClient, filename);
 				goto deactivate;
 			}
 			if (g_pFlaggedFile != NULL) {
 				g_pFlaggedFile = NULL;
 				if (activeDownload.maximalDuration <= 0 || Plat_FloatTime() <= g_BatchDeadlines[iClient])
 					continue; //still queued, all ok!
-				smutils->LogError(myself, "Client %d ('%s', %s) had insufficient bandwidth (<%d kbps), failed to receive '%s' in time! Kicking!", iClient, chan->GetName(), chan->GetAddress(), g_MinimalBandwidth.GetInt(), activeDownload.filename);
-				OnDownloadFailure(iClient, activeDownload.filename);
+				smutils->LogError(myself, "Client %d ('%s', %s) had insufficient bandwidth (<%d kbps), failed to receive '%s' in time! Kicking!", iClient, chan->GetName(), chan->GetAddress(), g_MinimalBandwidth.GetInt(), filename);
+				OnDownloadFailure(iClient, filename);
 				playerhelpers->GetGamePlayer(gamehelpers->EdictOfIndex(iClient))->Kick("You have insufficient bandwidth!");
 				goto deactivate;
 			}
 
-			OnDownloadSuccess(iClient, activeDownload.filename);
+			OnDownloadSuccess(iClient, filename);
 		deactivate:
 			activeDownload.clients.FastRemove(cit);
 			//reset iterator
@@ -205,7 +206,7 @@ void CExtension::OnGameFrame(bool simulating) {
 		}
 
 		if (activeDownload.clients.Count() == 0) {
-			OnDownloadSuccess(0, activeDownload.filename);
+			OnDownloadSuccess(0, filename);
 			g_ActiveDownloads.FastRemove(dit);
 			//reset iterator
 			dit--;
