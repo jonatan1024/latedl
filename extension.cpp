@@ -37,6 +37,7 @@
 
 #include <utlvector.h>
 #include <UtlStringMap.h>
+#include <utlstring.h>
 
 CExtension g_Extension;
 SMEXT_LINK(&g_Extension);
@@ -50,7 +51,7 @@ IServerPluginHelpers * g_pPluginHelpers = NULL;
 int g_TransferID = 0;
 
 struct ActiveDownload {
-	const char * filename;
+	CUtlString filename;
 	CUtlVector<int> clients;
 	float maximalDuration;
 };
